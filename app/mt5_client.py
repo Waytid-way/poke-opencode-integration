@@ -1,25 +1,31 @@
 import MetaTrader5 as mt5
 import logging
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger("mt5_mcp")
 
 class MT5Client:
-    def __init__(self):
-        if not mt5.initialize():
-            logger.error("MT5 initialization failed")
-            raise RuntimeError("Could not initialize MT5")
+    def __init__(self) -> None:
+        pass
 
-    def get_account_info(self):
+    def initialize(self) -> bool:
+        if not mt5.initialize():
+            logger.error(f"MT5 initialization failed, error code: {mt5.last_error()}")
+            return False
+        logger.info("MT5 initialized successfully")
+        return True
+
+    def get_account_info(self) -> Dict[str, Any]:
         account_info = mt5.account_info()
         if account_info is None:
             return {"error": f"Failed to get account info, error code: {mt5.last_error()}"}
         return account_info._asdict()
 
-    def place_order(self, symbol, order_type, volume, price=None):
-        \"\"\"
+    def place_order(self, symbol: str, order_type: str, volume: float, price: Optional[float] = None) -> Dict[str, Any]:
+        """
         Implementation for MT5 order placement using trade types for buy/sell.
         order_type should be 'buy' or 'sell'.
-        \"\"\"
+        """
         symbol_info = mt5.symbol_info(symbol)
         if symbol_info is None:
             return {"error": f"Symbol {symbol} not found"}
@@ -31,15 +37,21 @@ class MT5Client:
         if order_type.lower() == 'buy':
             trade_type = mt5.ORDER_TYPE_BUY
             if price is None:
-                price = mt5.symbol_info_tick(symbol).ask
+                tick = mt5.symbol_info_tick(symbol)
+                if tick is None:
+                    return {"error": "Could not get tick info"}
+                price = tick.ask
         elif order_type.lower() == 'sell':
             trade_type = mt5.ORDER_TYPE_SELL
             if price is None:
-                price = mt5.symbol_info_tick(symbol).bid
+                tick = mt5.symbol_info_tick(symbol)
+                if tick is None:
+                    return {"error": "Could not get tick info"}
+                price = tick.bid
         else:
             return {"error": f"Invalid order type: {order_type}. Must be 'buy' or 'sell'."}
 
-        request = {
+        request: Dict[str, Any] = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": symbol,
             "volume": float(volume),
@@ -60,5 +72,6 @@ class MT5Client:
             
         return result._asdict()
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         mt5.shutdown()
+        logger.info("MT5 shutdown successfully")
