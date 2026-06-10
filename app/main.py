@@ -1,4 +1,5 @@
 import logging
+import atexit
 from mcp.server.fastmcp import FastMCP
 from app.mt5_client import MT5Client
 from app.risk import RiskManager
@@ -10,19 +11,25 @@ setup_logger()
 logger = logging.getLogger("mt5_mcp")
 
 mt5_client = MT5Client()
-risk_manager = RiskManager()
+risk_manager = RiskManager(mt5_client)
+
+# Register shutdown handler
+atexit.register(mt5_client.shutdown)
 
 @mcp.tool()
 async def get_account_info():
-    """Get MetaTrader 5 account information."""
+    \"\"\"Get MetaTrader 5 account information.\"\"\"
     return mt5_client.get_account_info()
 
 @mcp.tool()
 async def place_order(symbol: str, order_type: str, volume: float, price: float = None):
-    """Place a trade on MT5 with risk validation."""
+    \"\"\"Place a trade on MT5 with risk validation.\"\"\"
     if not risk_manager.validate_trade(symbol, volume):
-        return {"error": "Risk validation failed"}
+        return {"error": "Risk validation failed: insufficient margin or invalid lot size"}
     return mt5_client.place_order(symbol, order_type, volume, price)
 
 if __name__ == "__main__":
-    mcp.run()
+    try:
+        mcp.run()
+    finally:
+        mt5_client.shutdown()
